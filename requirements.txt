@@ -1,0 +1,5 @@
+tensorflow==2.8.0
+openslide-python==1.1.2
+imageio==2.5.0
+nvflare==2.0.11
+

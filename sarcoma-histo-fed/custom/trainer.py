@@ -93,40 +93,8 @@ class SimpleTrainer(Executor):
             self.validation_split,
         )
 
-        # args = ((self.tile_size, self.tile_size), 3, 'bilinear', False)
-        # args = (False, 'rgb', (self.tile_size, self.tile_size), 'bilinear', False)
-
         self.train_ds = get_dataset(train_files, 32, num_classes)
         self.validation_ds = get_dataset(validation_files, 32, num_classes)
-        """
-        self.train_ds = tf.data.Dataset.from_tensor_slices(train_files)
-        self.train_ds = self.train_ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
-        self.train_ds = self.train_ds.prefetch(buffer_size=32)
-
-        self.validation_ds = tf.data.Dataset.from_tensor_slices(validation_files)
-        self.validation_ds = self.validation_ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
-        self.validation_ds = self.validation_ds.prefetch(buffer_size=32)
-        Ideally we do tiling of svs into jpegs here, and also normalize stuff
-        - tile svs into jpegs (deeppath way or cucim??)
-        - normalize (create keras layer for this in future? may be mor efficient?)
-        - use tf.keras.preprocessing.image_dataset_from_directory to get training/validation splits
-          https://stackoverflow.com/questions/64374691/apply-different-data-augmentation-to-part-of-the-train-set-based-on-the-category
-        - then add image augmentation layers to model https://keras.io/guides/preprocessing_layers/#quick-recipes
-          though this seems to be doing augmentation on cpu instead of gpu. maybe do this instead https://keras.io/guides/preprocessing_layers/#preprocessing-data-before-the-model-or-inside-the-model
-          - if doing this image augmentation layer then define model as a class and define get_config and from_config methods https://github.com/keras-team/keras/issues/15699
-          - downside is that this will augment all classes? we may only want to augment some?
-        - alternative augmentation is using ImageDataGenerator. Specifically use multiple and stitch together https://stackoverflow.com/questions/67013645/appliyng-data-augmentation-to-all-but-one-class-in-python
-          - labels do need to be fixed up here though...set the class_indices attribute/dictionary??
-          - also ImageDataGenerator may be slower!
-          - may be cleaner to use customized tf.data.Dataset https://stackoverflow.com/questions/64374691/apply-different-data-augmentation-to-part-of-the-train-set-based-on-the-category
-          - also tf.data.Dataset route could be faster?
-        - https://www.tensorflow.org/tutorials/images/data_augmentation
-        - make sure to pass tf.keras.applications.inception_v3.preprocess_input to ImageDataGenerator (way to do it for image_dataset_from_directory)
-          - this will normalize input so that it can be fed to model
-          - maybe this can be made part of the model instead of calling
-          - x /= 255.; x -= 0.5; x *= 2.
-
-        """
         self.model = build_model((self.tile_size, self.tile_size))
 
     def execute(
@@ -167,9 +135,6 @@ class SimpleTrainer(Executor):
         for layer_idx in range(4):
             layer = self.model.get_layer(index=layer_idx)
             layer.set_weights(model_weights[layer.name])
-        """
-        self.model.set_weights(model_weights)
-        """
 
         # adjust LR or other training time info as needed
         # such as callback in the fit function
@@ -178,12 +143,6 @@ class SimpleTrainer(Executor):
         )
 
         # report updated weights in shareable
-        """
-        weights = {
-            self.model.get_layer(index=key).name: value
-            for key, value in enumerate(self.model.get_weights())
-        }
-        """
         weights = {
             self.model.get_layer(index=layer_idx)
             .name: self.model.get_layer(index=layer_idx)

@@ -4,11 +4,16 @@ from nvflare.apis.dxo import DXO
 from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable
 from nvflare.app_common.app_constant import AppConstants
-from nvflare.app_common.aggregators.accumulate_model_aggregator import AccumulateWeightedAggregator, _AccuItem
+from nvflare.app_common.aggregators.accumulate_model_aggregator import (
+    AccumulateWeightedAggregator,
+    _AccuItem,
+)
+
 
 class NestedAccumulatedWeightedAggregator(AccumulateWeightedAggregator):
-
-    def __init__(self, exclude_vars=None, aggregation_weights=None, expected_data_kind="WEIGHT_DIFF"):
+    def __init__(
+        self, exclude_vars=None, aggregation_weights=None, expected_data_kind="WEIGHT_DIFF"
+    ):
         super().__init__(exclude_vars, aggregation_weights, expected_data_kind)
 
     def aggregate(self, fl_ctx: FLContext) -> Shareable:
@@ -24,14 +29,19 @@ class NestedAccumulatedWeightedAggregator(AccumulateWeightedAggregator):
             Shareable: Return True to indicates the current model is the best model so far.
         """
         current_round = fl_ctx.get_prop(AppConstants.CURRENT_ROUND)
-        self.log_info(fl_ctx, "aggregating {} updates at round {}".format(len(self.accumulator), current_round))
+        self.log_info(
+            fl_ctx,
+            "aggregating {} updates at round {}".format(len(self.accumulator), current_round),
+        )
 
         # TODO: What if AppConstants.GLOBAL_MODEL is None?
         acc_vars = [set(acc.data.keys()) for acc in self.accumulator]
         acc_vars = set.union(*acc_vars) if acc_vars else acc_vars
         # update vars that are not in exclude pattern
         vars_to_aggregate = (
-            [g_var for g_var in acc_vars if not self.exclude_vars.search(g_var)] if self.exclude_vars else acc_vars
+            [g_var for g_var in acc_vars if not self.exclude_vars.search(g_var)]
+            if self.exclude_vars
+            else acc_vars
         )
 
         clients_with_messages = []
@@ -82,7 +92,10 @@ class NestedAccumulatedWeightedAggregator(AccumulateWeightedAggregator):
                     weighted_value = data[v_name] * float_n_iter * aggregation_weight
                 if client_name not in clients_with_messages:
                     if client_name in self.aggregation_weights.keys():
-                        self.log_debug(fl_ctx, f"Client {client_name} use weight {aggregation_weight} for aggregation.")
+                        self.log_debug(
+                            fl_ctx,
+                            f"Client {client_name} use weight {aggregation_weight} for aggregation.",
+                        )
                     else:
                         self.log_debug(
                             fl_ctx,

@@ -101,12 +101,6 @@ class TF2ModelPersistor(ModelPersistor):
         else:
             self.logger.info(f"Initializing server model")
             model = build_model((self.tile_size, self.tile_size))
-            """
-            var_dict = {
-                model.get_layer(index=key).name: value
-                for key, value in enumerate(model.get_weights())
-            }
-            """
             var_dict = {
                 model.get_layer(index=layer_index)
                 .name: model.get_layer(index=layer_index)

@@ -128,4 +128,5 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-rhado-histo-fed/config/*json
+.vscode/
+sarcoma-histo-fed/config/*json

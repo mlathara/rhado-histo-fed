@@ -1,13 +1,12 @@
 import numpy as np
-
 from nvflare.apis.dxo import DXO
 from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable
-from nvflare.app_common.app_constant import AppConstants
 from nvflare.app_common.aggregators.accumulate_model_aggregator import (
     AccumulateWeightedAggregator,
     _AccuItem,
 )
+from nvflare.app_common.app_constant import AppConstants
 
 
 class NestedAccumulatedWeightedAggregator(AccumulateWeightedAggregator):
@@ -49,7 +48,6 @@ class NestedAccumulatedWeightedAggregator(AccumulateWeightedAggregator):
         for v_name in vars_to_aggregate:
             n_local_iters, np_vars = [], []
             for item in self.accumulator:
-                assert isinstance(item, _AccuItem)
                 client_name = item.client
                 data = item.data
                 n_iter = item.steps
@@ -86,7 +84,9 @@ class NestedAccumulatedWeightedAggregator(AccumulateWeightedAggregator):
                     aggregation_weight = 1.0
 
                 if isinstance(data[v_name], list):
-                    weighted_value_np = np.array(data[v_name]) * float_n_iter * aggregation_weight
+                    weighted_value_np = (
+                        np.array(data[v_name], dtype=object) * float_n_iter * aggregation_weight
+                    )
                     weighted_value = weighted_value_np.tolist()
                 else:
                     weighted_value = data[v_name] * float_n_iter * aggregation_weight

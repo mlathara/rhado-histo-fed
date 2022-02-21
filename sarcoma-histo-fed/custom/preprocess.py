@@ -17,33 +17,23 @@
 """
 
 from __future__ import print_function
-import json
+
+import os
 import random
-import openslide
-from openslide import open_slide, ImageSlide
-from openslide.deepzoom import DeepZoomGenerator
-from optparse import OptionParser
 import re
 import shutil
-from unicodedata import normalize
-import numpy as np
-
-# import scipy.misc
-import subprocess
-from glob import glob
-from multiprocessing import Process, JoinableQueue, Queue
-import time
-import os
 import sys
+from glob import glob
+from multiprocessing import JoinableQueue, Process, Queue
+from optparse import OptionParser
+from unicodedata import normalize
 
-
-from imageio import imwrite
-from imageio import imread
-
-
-from xml.dom import minidom
+import numpy as np
+import openslide
+from imageio import imread, imwrite
+from openslide import ImageSlide, open_slide
+from openslide.deepzoom import DeepZoomGenerator
 from PIL import Image, ImageDraw
-
 
 VIEWER_SLIDE_NAME = "slide"
 
@@ -494,37 +484,6 @@ class DeepZoomStaticTiler(object):
             self._queue.put(None)
         self._queue.join()
         self.out_queue.put(None)
-
-
-def ImgWorker(queue):
-    # print("ImgWorker started")
-    while True:
-        cmd = queue.get()
-        if cmd is None:
-            queue.task_done()
-            break
-        # print("Execute: %s" % (cmd))
-        subprocess.Popen(cmd, shell=True).wait()
-        queue.task_done()
-
-
-def xml_read_labels(xmldir):
-    try:
-        xmlcontent = minidom.parse(xmldir)
-        xml_valid = True
-    except:
-        xml_valid = False
-        print("error with minidom.parse(xmldir)")
-        return [], xml_valid
-    labeltag = xmlcontent.getElementsByTagName("Attribute")
-    xml_labels = []
-    for xmllabel in labeltag:
-        # xml_labels.append(xmllabel.attributes['Name'].value)
-        xml_labels.append(xmllabel.attributes["Value"].value)
-    if xml_labels == []:
-        xml_labels = [""]
-    print(xml_labels)
-    return xml_labels, xml_valid
 
 
 def get_sample_label(sample: str, sample_labels: dict) -> str:

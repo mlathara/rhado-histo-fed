@@ -12,19 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
-import pickle
 import json
+import os
+import pickle  # nosec B403
 
 import tensorflow as tf
-from network import InceptionV3_Path, build_model
+from network import build_model
 from nvflare.apis.event_type import EventType
 from nvflare.apis.fl_constant import FLContextKey
 from nvflare.apis.fl_context import FLContext
-from nvflare.app_common.abstract.model import ModelLearnable
+from nvflare.app_common.abstract.model import ModelLearnable, make_model_learnable
 from nvflare.app_common.abstract.model_persistor import ModelPersistor
 from nvflare.app_common.app_constant import AppConstants
-from nvflare.app_common.abstract.model import make_model_learnable
 
 
 class TF2ModelPersistor(ModelPersistor):
@@ -97,7 +96,7 @@ class TF2ModelPersistor(ModelPersistor):
         if os.path.exists(self._pkl_save_path):
             self.logger.info(f"Loading server weights")
             with open(self._pkl_save_path, "rb") as f:
-                model_learnable = pickle.load(f)
+                model_learnable = pickle.load(f)  # nosec B301
         else:
             self.logger.info(f"Initializing server model")
             model = build_model((self.tile_size, self.tile_size))

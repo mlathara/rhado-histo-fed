@@ -1,16 +1,15 @@
 from pkgutil import get_data
-import tensorflow as tf
 
+import tensorflow as tf
+from network import build_model
 from nvflare.apis.dxo import DXO, DataKind, from_shareable
-from nvflare.apis.fl_constant import ReturnCode
 from nvflare.apis.event_type import EventType
 from nvflare.apis.executor import Executor
+from nvflare.apis.fl_constant import ReturnCode
 from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable, make_reply
 from nvflare.apis.signal import Signal
-
 from preprocess import slides_to_tiles
-from network import build_model
 
 
 def load_image(image, height=299, width=299):

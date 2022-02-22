@@ -10,9 +10,10 @@ This project contains a federated machine learning application that does sarcoma
 The initial idea (and code) came from [DeepPATH](https://github.com/ncoudray/DeepPATH)
 
 ## References and Reading
-https://nvidia.github.io/NVFlare/installation.html
-https://nvidia.github.io/NVFlare/quickstart.html
-https://nvidia.github.io/NVFlare/examples/hello_tf2.html#train-the-model-federated
+
+ 1. https://nvidia.github.io/NVFlare/installation.html
+ 2. https://nvidia.github.io/NVFlare/quickstart.html
+ 3. https://nvidia.github.io/NVFlare/examples/hello_tf2.html#train-the-model-federated
 
 ## Requirements
 

@@ -25,6 +25,7 @@ The initial idea (and code) came from [DeepPATH](https://github.com/ncoudray/Dee
 
     export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64
     export CUDA_VISIBLE_DEVICES=0
+    export TF_GPU_ALLOCATOR=cuda_malloc_async
 
 Execute (to create directory, pull code, and create a virtual environment):  
 

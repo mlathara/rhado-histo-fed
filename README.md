@@ -17,14 +17,12 @@ The initial idea (and code) came from [DeepPATH](https://github.com/ncoudray/Dee
 
 ## Requirements
 
- 1. Python 3.8 (software must use this version of python)
+ 1. Python 3.8 - only tested with Python 3.8. Note, that in the NVIDIA Flare documentation it currently states: "NVIDIA FLARE requires Python 3.8. It may work with Python 3.7 but currently is not compatible with Python 3.9 and above."
 
 ## Installation
 
- Add to your .bash_profile:
+ Add to your .bash_profile (this was required due to an Out of Memory error with tensorflow):
 
-    export LD_LIBRARY_PATH=/usr/local/cuda-11.2/lib64
-    export CUDA_VISIBLE_DEVICES=0
     export TF_GPU_ALLOCATOR=cuda_malloc_async
 
 Execute (to create directory, pull code, and create a virtual environment):  
@@ -66,6 +64,14 @@ Execute process via the admin terminal console:
     deploy_app sarcoma-histo-fed all
     start_app all
 
+## Shutdown
+
+To shutdown the servers use the following command in the admin console:
+
+    shutdown all
+    [or]
+    shutdown client
+    shutdown server
 
 
 

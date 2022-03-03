@@ -1,6 +1,4 @@
 
-# sarcoma-histo-fed
-
   
 
 This project contains a federated machine learning application that does sarcoma classification based on histopathology slides. We use [NVIDIA NVFlare](https://github.com/NVIDIA/NVFlare) to federate the application.
@@ -50,6 +48,8 @@ Modify the config/json files located in sarcoma-histo-fed/sarcoma-histo-fed/conf
 
 ## Execution
 
+Process description: The client references local digital slides, which it tiles into smaller images. These images are in turn used by the client to train a local neural network model. After a user-defined number of epochs, the client passes the model weights back to the server, which aggregates all the client model weights into a single model. This single model is then used as the basis for the next round of training till the user-defined number of training rounds is completed.
+
 Start the server, the client, and the admin in 3 separate terminals (ensuring you have the venv activated via source venv/bin/activate):
 
     ./poc/server/startup/start.sh
@@ -73,8 +73,11 @@ To shutdown the servers use the following command in the admin console:
     shutdown client
     shutdown server
 
+## Developers
 
+A makefile is used for code formatting.
 
-
+    make format # to format the files
+    make lint # to test that the code passes the lint check
 
 

@@ -28,6 +28,9 @@ from multiprocessing import JoinableQueue, Process, Queue
 from optparse import OptionParser
 from unicodedata import normalize
 
+import cv2 as cv
+import spams
+
 import numpy as np
 import openslide
 from imageio import imread, imwrite
@@ -54,10 +57,70 @@ class TileWorker(Process):
         self._Bkg = _Bkg
         self._ROIpc = _ROIpc
 
+    def _stain_dict_Vahadane(self, img, thresh=0.8, vlambda=0.10):
+        imgLab = cv.cvtColor(img, cv.COLOR_RGB2LAB)
+        mask = (imgLab[:,:,0] / 255.0) < thresh
+        if np.sum(mask==True) == 0 :
+            mask = (imgLab[:,:,0] / 255.0) < (thresh+0.1)
+            if np.sum(mask==True) == 0 :
+                mask = (imgLab[:,:,0] / 255.0) < 1000
+        mask = mask.reshape((-1,))
+        # RGB to OD
+        imgOD = img
+        imgOD[(img == 0)] = 1
+        imgOD = (-1) * np.log(imgOD / 255)
+        imgOD = imgOD.reshape((-1, 3))
+        # mask OD
+        imgOD = imgOD[mask]
+        WisHisHisv = spams.trainDL(imgOD.T, K=2, lambda1=vlambda, mode=2, modeD=0, posAlpha=True, posD=True
+, verbose=False).T
+        if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
+            WisHisHisv = WisHisHisv[[1, 0], :]
+        # normalize rows
+        WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
+        return WisHisHisv
+
+    def _write_normalized_image(self, filepath, WisHisHisv):
+        descr = """
+        Apply Vahadane's normalization on list of images. Reference:
+        % @inproceedings{Vahadane2015ISBI,
+        %       Author = {Abhishek Vahadane and Tingying Peng and Shadi Albarqouni and Maximilian Baust and Katja Steiger and Anna Melissa Schlitter and Amit Sethi and Irene Esposito and Nassir Navab},
+        %       Booktitle = {IEEE International Symposium on Biomedical Imaging},
+        %       Title = {Structure-Preserved Color Normalization for Histological Images},
+        %       Year = {2015}}
+
+        """
+        tile = cv.imread(filepath)
+        tile = cv.cvtColor(np.asarray(tile), cv.COLOR_BGR2RGB)
+        p = np.percentile(tile, 90)
+        if p == 0:
+            p = 1.0
+        img2t = np.clip(tile * 255.0 / p, 0, 255).astype(np.uint8)
+        WisHisHisv2 = self._stain_dict_Vahadane(img2t)
+        # get concentration
+        imgOD2 = img2t
+        imgOD2[(img2t == 0)] = 1
+        imgOD2 = (-1) * np.log(imgOD2 / 255.0)
+        imgOD2 = imgOD2.reshape((-1, 3))
+        start_values = spams.lasso(imgOD2.T, D=WisHisHisv2.T, mode=2, lambda1=0.01, pos=True).toarray().T 
+        img_end = (255 * np.exp(-1 * np.dot(start_values, WisHisHisv).reshape(tile.shape))).astype(np.uint8)
+        imgout = Image.fromarray(img_end)
+        imgout.save(filepath + "_nm", quality=100)
+
     def run(self):
         self._slide = open_slide(self._slidepath)
         last_associated = None
         dz = self._get_dz()
+        
+        # Obtain normalized tile to be used for all others
+        tile = cv.imread("baseimage.jpeg")
+        tile = cv.cvtColor(tile, cv.COLOR_BGR2RGB)
+        # standardize brightness
+        p = np.percentile(tile, 90)
+        tile = np.clip(tile * 255.0 / p, 0, 255).astype(np.uint8)
+        # get stain dictionnary
+        WisHisHisv = self._stain_dict_Vahadane(tile)
+
         while True:
             data = self._queue.get()
             if data is None:
@@ -108,6 +171,7 @@ class TileWorker(Process):
                             # if PercentMasked > 0.05:
                             # print("saving " + outfile)
                             tile.save(outfile, quality=self._quality)
+                            self._write_normalized_image(outfile, WisHisHisv)
                             # print(str(self.out_queue))
                             # print(str(self.out_queue.qsize()))
                             if bool(SaveMasks) == True:

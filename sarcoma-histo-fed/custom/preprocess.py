@@ -29,10 +29,9 @@ from optparse import OptionParser
 from unicodedata import normalize
 
 import cv2 as cv
-import spams
-
 import numpy as np
 import openslide
+import spams
 from imageio import imread, imwrite
 from openslide import ImageSlide, open_slide
 from openslide.deepzoom import DeepZoomGenerator
@@ -59,11 +58,11 @@ class TileWorker(Process):
 
     def _stain_dict_Vahadane(self, img, thresh=0.8, vlambda=0.10):
         imgLab = cv.cvtColor(img, cv.COLOR_RGB2LAB)
-        mask = (imgLab[:,:,0] / 255.0) < thresh
-        if np.sum(mask==True) == 0 :
-            mask = (imgLab[:,:,0] / 255.0) < (thresh+0.1)
-            if np.sum(mask==True) == 0 :
-                mask = (imgLab[:,:,0] / 255.0) < 1000
+        mask = (imgLab[:, :, 0] / 255.0) < thresh
+        if np.sum(mask == True) == 0:
+            mask = (imgLab[:, :, 0] / 255.0) < (thresh + 0.1)
+            if np.sum(mask == True) == 0:
+                mask = (imgLab[:, :, 0] / 255.0) < 1000
         mask = mask.reshape((-1,))
         # RGB to OD
         imgOD = img
@@ -72,8 +71,9 @@ class TileWorker(Process):
         imgOD = imgOD.reshape((-1, 3))
         # mask OD
         imgOD = imgOD[mask]
-        WisHisHisv = spams.trainDL(imgOD.T, K=2, lambda1=vlambda, mode=2, modeD=0, posAlpha=True, posD=True
-, verbose=False).T
+        WisHisHisv = spams.trainDL(
+            imgOD.T, K=2, lambda1=vlambda, mode=2, modeD=0, posAlpha=True, posD=True, verbose=False
+        ).T
         if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
             WisHisHisv = WisHisHisv[[1, 0], :]
         # normalize rows
@@ -102,8 +102,12 @@ class TileWorker(Process):
         imgOD2[(img2t == 0)] = 1
         imgOD2 = (-1) * np.log(imgOD2 / 255.0)
         imgOD2 = imgOD2.reshape((-1, 3))
-        start_values = spams.lasso(imgOD2.T, D=WisHisHisv2.T, mode=2, lambda1=0.01, pos=True).toarray().T 
-        img_end = (255 * np.exp(-1 * np.dot(start_values, WisHisHisv).reshape(tile.shape))).astype(np.uint8)
+        start_values = (
+            spams.lasso(imgOD2.T, D=WisHisHisv2.T, mode=2, lambda1=0.01, pos=True).toarray().T
+        )
+        img_end = (255 * np.exp(-1 * np.dot(start_values, WisHisHisv).reshape(tile.shape))).astype(
+            np.uint8
+        )
         imgout = Image.fromarray(img_end)
         imgout.save(filepath + "_nm", quality=100)
 
@@ -111,7 +115,7 @@ class TileWorker(Process):
         self._slide = open_slide(self._slidepath)
         last_associated = None
         dz = self._get_dz()
-        
+
         # Obtain normalized tile to be used for all others
         tile = cv.imread("baseimage.jpeg")
         tile = cv.cvtColor(tile, cv.COLOR_BGR2RGB)

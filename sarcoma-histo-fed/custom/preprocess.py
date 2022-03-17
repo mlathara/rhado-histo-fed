@@ -72,7 +72,15 @@ class TileWorker(Process):
         # mask OD
         imgOD = imgOD[mask]
         WisHisHisv = spams.trainDL(
-            imgOD.T, K=2, lambda1=vlambda, mode=2, modeD=0, posAlpha=True, posD=True, verbose=False, numThreads=1
+            imgOD.T,
+            K=2,
+            lambda1=vlambda,
+            mode=2,
+            modeD=0,
+            posAlpha=True,
+            posD=True,
+            verbose=False,
+            numThreads=1,
         ).T
         if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
             WisHisHisv = WisHisHisv[[1, 0], :]
@@ -103,7 +111,9 @@ class TileWorker(Process):
         imgOD2 = (-1) * np.log(imgOD2 / 255.0)
         imgOD2 = imgOD2.reshape((-1, 3))
         start_values = (
-            spams.lasso(imgOD2.T, D=WisHisHisv2.T, mode=2, lambda1=0.01, pos=True, numThreads=1).toarray().T
+            spams.lasso(imgOD2.T, D=WisHisHisv2.T, mode=2, lambda1=0.01, pos=True, numThreads=1)
+            .toarray()
+            .T
         )
         img_end = (255 * np.exp(-1 * np.dot(start_values, WisHisHisv).reshape(tile.shape))).astype(
             np.uint8

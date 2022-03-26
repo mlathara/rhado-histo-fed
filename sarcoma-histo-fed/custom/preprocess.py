@@ -85,6 +85,8 @@ class TileWorker(Process):
         if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
             WisHisHisv = WisHisHisv[[1, 0], :]
         # normalize rows
+        print("before it")
+        print(WisHisHisv)
         WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
         return WisHisHisv
 
@@ -119,7 +121,8 @@ class TileWorker(Process):
             np.uint8
         )
         imgout = Image.fromarray(img_end)
-        imgout.save(filepath + "_nm", quality=100)
+        new_filepath = filepath.replace(".jpeg", "_nm.jpeg")
+        imgout.save(new_filepath, quality=100)
 
     def run(self):
         self._slide = open_slide(self._slidepath)

@@ -43,7 +43,7 @@ VIEWER_SLIDE_NAME = "slide"
 class TileWorker(Process):
     """A child process that generates and writes tiles."""
 
-    def __init__(self, queue, slidepath, tile_size, overlap, limit_bounds, quality, _Bkg, _ROIpc):
+    def __init__(self, queue, slidepath, tile_size, overlap, limit_bounds, quality, _Bkg, _ROIpc, baseimage, out_queue):
         Process.__init__(self, name="TileWorker")
         self.daemon = True
         self._queue = queue
@@ -55,6 +55,8 @@ class TileWorker(Process):
         self._slide = None
         self._Bkg = _Bkg
         self._ROIpc = _ROIpc
+        self._baseimage = baseimage
+        self._out_queue = out_queue
 
     def _stain_dict_Vahadane(self, img, thresh=0.8, vlambda=0.10):
         imgLab = cv.cvtColor(img, cv.COLOR_RGB2LAB)
@@ -85,12 +87,10 @@ class TileWorker(Process):
         if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
             WisHisHisv = WisHisHisv[[1, 0], :]
         # normalize rows
-        print("before it")
-        print(WisHisHisv)
         WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
         return WisHisHisv
 
-    def _write_normalized_image(self, filepath, WisHisHisv):
+    def _write_normalized_image(self, pil_image, filepath, WisHisHisv, quality):
         descr = """
         Apply Vahadane's normalization on list of images. Reference:
         % @inproceedings{Vahadane2015ISBI,
@@ -100,8 +100,7 @@ class TileWorker(Process):
         %       Year = {2015}}
 
         """
-        tile = cv.imread(filepath)
-        tile = cv.cvtColor(np.asarray(tile), cv.COLOR_BGR2RGB)
+        tile = np.array(pil_image)
         p = np.percentile(tile, 90)
         if p == 0:
             p = 1.0
@@ -121,8 +120,7 @@ class TileWorker(Process):
             np.uint8
         )
         imgout = Image.fromarray(img_end)
-        new_filepath = filepath.replace(".jpeg", "_nm.jpeg")
-        imgout.save(new_filepath, quality=100)
+        imgout.save(filepath, quality=quality)
 
     def run(self):
         self._slide = open_slide(self._slidepath)
@@ -130,7 +128,7 @@ class TileWorker(Process):
         dz = self._get_dz()
 
         # Obtain normalized tile to be used for all others
-        tile = cv.imread("baseimage.jpeg")
+        tile = cv.imread(self._baseimage)
         tile = cv.cvtColor(tile, cv.COLOR_BGR2RGB)
         # standardize brightness
         p = np.percentile(tile, 90)
@@ -187,8 +185,12 @@ class TileWorker(Process):
                         if PercentMasked >= (self._ROIpc / 100.0):
                             # if PercentMasked > 0.05:
                             # print("saving " + outfile)
-                            tile.save(outfile, quality=self._quality)
-                            self._write_normalized_image(outfile, WisHisHisv)
+                            try:
+                                self._write_normalized_image(tile, outfile, WisHisHisv, self._quality)
+                                self._out_queue.put(outfile)
+                            except Warning:
+                                print("Skipping "+ outfile)
+                                continue
                             # print(str(self.out_queue))
                             # print(str(self.out_queue.qsize()))
                             if bool(SaveMasks) == True:
@@ -465,6 +467,7 @@ class DeepZoomStaticTiler(object):
         SaveMasks,
         Mag,
         out_queue,
+        baseimage,
     ):
         self._slide = open_slide(slidepath)
         self._basename = basename
@@ -486,6 +489,7 @@ class DeepZoomStaticTiler(object):
         self._SaveMasks = SaveMasks
         self._Mag = Mag
         self.out_queue = out_queue
+        self._baseimage = baseimage
 
         for _i in range(workers):
             TileWorker(
@@ -497,6 +501,8 @@ class DeepZoomStaticTiler(object):
                 quality,
                 self._Bkg,
                 self._ROIpc,
+                self._baseimage,
+                self.out_queue,
             ).start()
 
     def run(self):
@@ -607,6 +613,7 @@ def slides_to_tiles(
     magnification: float,
     label_file: str,
     validation_split: float,
+    baseimage: str,
 ):
     # dict of {label: [list_of_samples_with_label]}
     sample_labels = {}
@@ -663,6 +670,7 @@ def slides_to_tiles(
                 False,  # savemasks
                 magnification,
                 train_queue,
+                baseimage,
             ).run()
             tile_path = train_queue.get()
             while tile_path:
@@ -700,6 +708,7 @@ def slides_to_tiles(
                 False,  # savemasks
                 magnification,
                 validation_queue,
+                baseimage,
             ).run()
             tile_path = validation_queue.get()
             while tile_path:

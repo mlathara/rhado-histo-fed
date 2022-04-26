@@ -43,7 +43,19 @@ VIEWER_SLIDE_NAME = "slide"
 class TileWorker(Process):
     """A child process that generates and writes tiles."""
 
-    def __init__(self, queue, slidepath, tile_size, overlap, limit_bounds, quality, _Bkg, _ROIpc, baseimage, out_queue):
+    def __init__(
+        self,
+        queue,
+        slidepath,
+        tile_size,
+        overlap,
+        limit_bounds,
+        quality,
+        _Bkg,
+        _ROIpc,
+        baseimage,
+        out_queue,
+    ):
         Process.__init__(self, name="TileWorker")
         self.daemon = True
         self._queue = queue
@@ -186,10 +198,12 @@ class TileWorker(Process):
                             # if PercentMasked > 0.05:
                             # print("saving " + outfile)
                             try:
-                                self._write_normalized_image(tile, outfile, WisHisHisv, self._quality)
+                                self._write_normalized_image(
+                                    tile, outfile, WisHisHisv, self._quality
+                                )
                                 self._out_queue.put(outfile)
                             except Warning:
-                                print("Skipping "+ outfile)
+                                print("Skipping " + outfile)
                                 continue
                             # print(str(self.out_queue))
                             # print(str(self.out_queue.qsize()))

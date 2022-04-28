@@ -99,7 +99,9 @@ class TileWorker(Process):
         if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
             WisHisHisv = WisHisHisv[[1, 0], :]
         # normalize rows
-        WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
+        # disregard an empty or black portion in second array of arrays
+        if not np.array_equal(WisHisHisv[1], [0,0,0]):
+            WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
         return WisHisHisv
 
     def _write_normalized_image(self, pil_image, filepath, WisHisHisv, quality):

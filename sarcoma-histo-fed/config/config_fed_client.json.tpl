@@ -19,7 +19,8 @@
           "magnification": 5,
           "labels_file": "/path/to/labels",
           "validation_split": 0.2,
-          "flipmode": "horizontal_and_vertical"
+          "flipmode": "horizontal_and_vertical",
+          "num_epoch_per_auc_calc": 0
         }
       }
     }

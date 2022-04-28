@@ -12,6 +12,14 @@ def build_model(tile_size: tuple):
     outputs = tf.keras.layers.Dense(3, activation="softmax")(x)
     model = tf.keras.Model(inputs, outputs)
     loss_fn = tf.keras.losses.CategoricalCrossentropy(from_logits=False)
+
+    # need tfma for confusion matrix if we want it...
+    metrics = [
+        tf.keras.metrics.SparseCategoricalAccuracy(name="accuracy"),
+        tf.keras.metrics.AUC(name="auc", curve="ROC"),
+        tf.keras.metrics.AUC(name="auc_precision_recall", curve="PR"),
+    ]
+
     model.compile(optimizer="adam", loss=loss_fn, metrics=["accuracy"])
 
     return model

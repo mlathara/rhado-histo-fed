@@ -1,5 +1,3 @@
-from pkgutil import get_data
-
 import tensorflow as tf
 from network import build_model
 from nvflare.apis.dxo import DXO, DataKind, from_shareable
@@ -10,6 +8,7 @@ from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable, make_reply
 from nvflare.apis.signal import Signal
 from preprocess import slides_to_tiles
+from slide_aucroc import SlideROCCallback
 
 
 def load_image(image, height=299, width=299):
@@ -23,17 +22,27 @@ def load_image(image, height=299, width=299):
 
 def get_dataset(files, batch_size, num_classes):
     paths = [f[0] for f in files]
+    # either we make arrays out of the label elements
+    # or we have to tf.reshape the one_hot vectors later
     labels = [[f[1]] for f in files]
+    # tile filenames contain row and col separated by _ - removing that gives us the slide name
+    filenames = ["_".join(f[0].split("/")[-1].split("_")[:-2]) for f in files]
+
+    # convert filenames to integer ids for later reduction
+    tempdict = {}
+    for f in filenames:
+        tempdict[f] = len(tempdict)
 
     ds = tf.data.Dataset.from_tensor_slices(paths)
-    ds = ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
+    files = tf.data.Dataset.from_tensor_slices([tempdict[f] for f in filenames])
+    pixels = ds.map(load_image, num_parallel_calls=tf.data.AUTOTUNE)
 
     label_ds = tf.data.Dataset.from_tensor_slices(labels)
     label_ds = label_ds.map(
         lambda x: tf.one_hot(x, num_classes), num_parallel_calls=tf.data.AUTOTUNE
     )
 
-    ds = tf.data.Dataset.zip((ds, label_ds))
+    ds = tf.data.Dataset.zip((files, pixels, label_ds))
     ds = ds.prefetch(buffer_size=batch_size)
     return ds
 
@@ -53,6 +62,7 @@ class SimpleTrainer(Executor):
         labels_file: str,
         validation_split: float,
         flipmode: str,
+        num_epoch_per_auc_calc: int,
     ):
         super().__init__()
         self.epochs_per_round = epochs_per_round
@@ -69,6 +79,7 @@ class SimpleTrainer(Executor):
         self.magnification = magnification
         self.labels_file = labels_file
         self.validation_split = validation_split
+        self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
         if flipmode not in ["horizontal", "vertical", "horizontal_and_vertical"]:
             self.flipmode = None
         else:
@@ -137,9 +148,11 @@ class SimpleTrainer(Executor):
 
         # adjust LR or other training time info as needed
         # such as callback in the fit function
-        self.model.fit(
-            self.train_ds, epochs=self.epochs_per_round, validation_data=self.validation_ds
-        )
+        train = self.train_ds.map(lambda file, pixels, label: (pixels, label))
+        valid = self.validation_ds.map(lambda file, pixels, label: (pixels, label))
+
+        roc = SlideROCCallback(self.train_ds, self.validation_ds, self.num_epoch_per_auc_calc)
+        self.model.fit(train, epochs=self.epochs_per_round, validation_data=valid, callbacks=[roc])
 
         # report updated weights in shareable
         weights = {

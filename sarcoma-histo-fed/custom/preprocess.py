@@ -100,7 +100,7 @@ class TileWorker(Process):
             WisHisHisv = WisHisHisv[[1, 0], :]
         # normalize rows
         # disregard an empty or black portion in second array of arrays
-        if not np.array_equal(WisHisHisv[1], [0,0,0]):
+        if not np.array_equal(WisHisHisv[1], [0, 0, 0]):
             WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
         return WisHisHisv
 

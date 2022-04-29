@@ -242,7 +242,9 @@ class TileWorker(Process):
                     # print("%s empty: %f" %(outfile, avgBkg))
                 except:
                     self.logger.warn(level, address)
-                    self.logger.warn("image %s failed at dz.get_tile for level %f" % (self._slidepath, level))
+                    self.logger.warn(
+                        "image %s failed at dz.get_tile for level %f" % (self._slidepath, level)
+                    )
                 finally:
                     self._queue.task_done()
 

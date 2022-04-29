@@ -52,4 +52,7 @@ class SlideROCCallback(tf.keras.callbacks.Callback):
         train_roc = compute_roc_auc(self.train, self.model)
         valid_roc = compute_roc_auc(self.valid, self.model)
 
-        self.logger.info("\nTrain ROC-AUC: %.4f\nValid ROC-AUC: %.4f\n" % (train_roc, valid_roc))
+        self.logger.info(
+            "\nSlide-level train ROC-AUC: %.4f\nSlide-level valid ROC-AUC: %.4f\n"
+            % (train_roc, valid_roc)
+        )

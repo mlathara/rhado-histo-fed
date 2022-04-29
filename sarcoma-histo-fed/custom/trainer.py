@@ -63,6 +63,7 @@ class SimpleTrainer(Executor):
         validation_split: float,
         flipmode: str,
         num_epoch_per_auc_calc: int,
+        tensorboard: str,
     ):
         super().__init__()
         self.epochs_per_round = epochs_per_round
@@ -80,6 +81,7 @@ class SimpleTrainer(Executor):
         self.labels_file = labels_file
         self.validation_split = validation_split
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
+        self.tensorboard = tensorboard
         if flipmode not in ["horizontal", "vertical", "horizontal_and_vertical"]:
             self.flipmode = None
         else:
@@ -151,8 +153,31 @@ class SimpleTrainer(Executor):
         train = self.train_ds.map(lambda file, pixels, label: (pixels, label))
         valid = self.validation_ds.map(lambda file, pixels, label: (pixels, label))
 
-        roc = SlideROCCallback(self.train_ds, self.validation_ds, self.num_epoch_per_auc_calc)
-        self.model.fit(train, epochs=self.epochs_per_round, validation_data=valid, callbacks=[roc])
+        callbacks = []
+        if self.num_epoch_per_auc_calc:
+            callbacks.append(
+                SlideROCCallback(self.train_ds, self.validation_ds, self.num_epoch_per_auc_calc)
+            )
+        if self.tensorboard:
+            kwargs = {}
+            # why do this convoluted parsing?
+            # well I tried to pass a dict-as-string as a parameter in the client config json
+            # but it didn't work.
+            for arg in self.tensorboard.split(","):
+                k, v = arg.split("=")
+                if v.isdigit():
+                    kwargs[k] = int(v)
+                elif v.lower() == "true":
+                    kwargs[k] = True
+                elif v.lower() == "false":
+                    kwargs[k] = False
+                else:
+                    kwargs[k] = v
+            callbacks.append(tf.keras.callbacks.TensorBoard(**kwargs))
+
+        self.model.fit(
+            train, epochs=self.epochs_per_round, validation_data=valid, callbacks=callbacks
+        )
 
         # report updated weights in shareable
         weights = {

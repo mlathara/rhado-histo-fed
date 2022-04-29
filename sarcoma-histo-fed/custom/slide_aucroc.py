@@ -44,7 +44,7 @@ class SlideROCCallback(tf.keras.callbacks.Callback):
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
 
     def on_epoch_end(self, epoch, log={}):
-        if not self.num_epoch_per_auc_calc or epoch % self.num_epoch_per_auc_calc != 0:
+        if epoch % self.num_epoch_per_auc_calc != 0:
             return
         train_roc = compute_roc_auc(self.train, self.model)
         valid_roc = compute_roc_auc(self.valid, self.model)

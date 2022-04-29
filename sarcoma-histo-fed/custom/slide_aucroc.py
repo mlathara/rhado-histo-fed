@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -39,6 +40,7 @@ def compute_roc_auc(dataset, model):
 
 class SlideROCCallback(tf.keras.callbacks.Callback):
     def __init__(self, train, valid, num_epoch_per_auc_calc):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.train = train
         self.valid = valid
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
@@ -49,4 +51,4 @@ class SlideROCCallback(tf.keras.callbacks.Callback):
         train_roc = compute_roc_auc(self.train, self.model)
         valid_roc = compute_roc_auc(self.valid, self.model)
 
-        print("\nTrain ROC-AUC: %.4f\nValid ROC-AUC: %.4f\n" % (train_roc, valid_roc))
+        self.logger.info("\nTrain ROC-AUC: %.4f\nValid ROC-AUC: %.4f\n" % (train_roc, valid_roc))

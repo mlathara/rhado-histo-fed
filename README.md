@@ -81,4 +81,16 @@ A makefile is used for code formatting.
     make format # to format the files
     make lint # to test that the code passes the lint check
 
+## Tensorboard streaming
 
+Currently we only have support to view learning metrics directly from the client site. To enable this, the user must first configure [Tensorboard callback](https://www.tensorflow.org/api_docs/python/tf/keras/callbacks/TensorBoard) by setting the desired kwargs to the `tensorboard` parameter for the executor/SimpleTrainer in the client configuration.
+
+Next, the user must start tensorboard on the node running the client training:
+
+    tensorboard --logdir=/path/to/configured/logdir
+
+If the training is running on a remote machine, the user will need to forward ports appropriately:
+
+    ssh user@remote -L 6006:remote:6006
+
+Then visit `localhost:6006` in your local machine's web browser to view training metrics.

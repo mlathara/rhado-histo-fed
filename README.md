@@ -22,6 +22,7 @@ The initial idea (and code) came from [DeepPATH](https://github.com/ncoudray/Dee
  Add to your .bash_profile (this was required due to an Out of Memory error with tensorflow):
 
     export TF_GPU_ALLOCATOR=cuda_malloc_async
+    export OPENBLAS_NUM_THREADS=1   # required for color normalization process
 
 Execute (to create directory, pull code, and create a virtual environment):  
 

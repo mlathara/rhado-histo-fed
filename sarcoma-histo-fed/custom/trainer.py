@@ -64,6 +64,7 @@ class SimpleTrainer(Executor):
         flipmode: str,
         num_epoch_per_auc_calc: int,
         tensorboard: str,
+        baseimage: str,
     ):
         super().__init__()
         self.epochs_per_round = epochs_per_round
@@ -82,6 +83,7 @@ class SimpleTrainer(Executor):
         self.validation_split = validation_split
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
         self.tensorboard = tensorboard
+        self.baseimage = baseimage
         if flipmode not in ["horizontal", "vertical", "horizontal_and_vertical"]:
             self.flipmode = None
         else:
@@ -103,6 +105,7 @@ class SimpleTrainer(Executor):
             self.magnification,
             self.labels_file,
             self.validation_split,
+            self.baseimage,
         )
 
         self.train_ds = get_dataset(train_files, 32, num_classes)

@@ -21,7 +21,8 @@
           "validation_split": 0.2,
           "flipmode": "horizontal_and_vertical",
           "num_epoch_per_auc_calc": 0,
-          "tensorboard": "string-of-comma-separated-tensorboard-kwargs"
+          "tensorboard": "string-of-comma-separated-tensorboard-kwargs",
+          "baseimage": "/path/to/baseimage.jpg"
         }
       }
     }

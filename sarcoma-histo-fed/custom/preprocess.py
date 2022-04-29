@@ -28,8 +28,10 @@ from multiprocessing import JoinableQueue, Process, Queue
 from optparse import OptionParser
 from unicodedata import normalize
 
+import cv2 as cv
 import numpy as np
 import openslide
+import spams
 from imageio import imread, imwrite
 from openslide import ImageSlide, open_slide
 from openslide.deepzoom import DeepZoomGenerator
@@ -41,7 +43,19 @@ VIEWER_SLIDE_NAME = "slide"
 class TileWorker(Process):
     """A child process that generates and writes tiles."""
 
-    def __init__(self, queue, slidepath, tile_size, overlap, limit_bounds, quality, _Bkg, _ROIpc):
+    def __init__(
+        self,
+        queue,
+        slidepath,
+        tile_size,
+        overlap,
+        limit_bounds,
+        quality,
+        _Bkg,
+        _ROIpc,
+        baseimage,
+        out_queue,
+    ):
         Process.__init__(self, name="TileWorker")
         self.daemon = True
         self._queue = queue
@@ -53,11 +67,89 @@ class TileWorker(Process):
         self._slide = None
         self._Bkg = _Bkg
         self._ROIpc = _ROIpc
+        self._baseimage = baseimage
+        self._out_queue = out_queue
+
+    def _stain_dict_Vahadane(self, img, thresh=0.8, vlambda=0.10):
+        imgLab = cv.cvtColor(img, cv.COLOR_RGB2LAB)
+        mask = (imgLab[:, :, 0] / 255.0) < thresh
+        if np.sum(mask == True) == 0:
+            mask = (imgLab[:, :, 0] / 255.0) < (thresh + 0.1)
+            if np.sum(mask == True) == 0:
+                mask = (imgLab[:, :, 0] / 255.0) < 1000
+        mask = mask.reshape((-1,))
+        # RGB to OD
+        imgOD = img
+        imgOD[(img == 0)] = 1
+        imgOD = (-1) * np.log(imgOD / 255)
+        imgOD = imgOD.reshape((-1, 3))
+        # mask OD
+        imgOD = imgOD[mask]
+        WisHisHisv = spams.trainDL(
+            imgOD.T,
+            K=2,
+            lambda1=vlambda,
+            mode=2,
+            modeD=0,
+            posAlpha=True,
+            posD=True,
+            verbose=False,
+            numThreads=1,
+        ).T
+        if WisHisHisv[0, 0] < WisHisHisv[1, 0]:
+            WisHisHisv = WisHisHisv[[1, 0], :]
+        # normalize rows
+        # disregard an empty or black portion in second array of arrays
+        if not np.array_equal(WisHisHisv[1], [0, 0, 0]):
+            WisHisHisv = WisHisHisv / np.linalg.norm(WisHisHisv, axis=1)[:, None]
+        return WisHisHisv
+
+    def _write_normalized_image(self, pil_image, filepath, WisHisHisv, quality):
+        descr = """
+        Apply Vahadane's normalization on list of images. Reference:
+        % @inproceedings{Vahadane2015ISBI,
+        %       Author = {Abhishek Vahadane and Tingying Peng and Shadi Albarqouni and Maximilian Baust and Katja Steiger and Anna Melissa Schlitter and Amit Sethi and Irene Esposito and Nassir Navab},
+        %       Booktitle = {IEEE International Symposium on Biomedical Imaging},
+        %       Title = {Structure-Preserved Color Normalization for Histological Images},
+        %       Year = {2015}}
+
+        """
+        tile = np.array(pil_image)
+        p = np.percentile(tile, 90)
+        if p == 0:
+            p = 1.0
+        img2t = np.clip(tile * 255.0 / p, 0, 255).astype(np.uint8)
+        WisHisHisv2 = self._stain_dict_Vahadane(img2t)
+        # get concentration
+        imgOD2 = img2t
+        imgOD2[(img2t == 0)] = 1
+        imgOD2 = (-1) * np.log(imgOD2 / 255.0)
+        imgOD2 = imgOD2.reshape((-1, 3))
+        start_values = (
+            spams.lasso(imgOD2.T, D=WisHisHisv2.T, mode=2, lambda1=0.01, pos=True, numThreads=1)
+            .toarray()
+            .T
+        )
+        img_end = (255 * np.exp(-1 * np.dot(start_values, WisHisHisv).reshape(tile.shape))).astype(
+            np.uint8
+        )
+        imgout = Image.fromarray(img_end)
+        imgout.save(filepath, quality=quality)
 
     def run(self):
         self._slide = open_slide(self._slidepath)
         last_associated = None
         dz = self._get_dz()
+
+        # Obtain normalized tile to be used for all others
+        tile = cv.imread(self._baseimage)
+        tile = cv.cvtColor(tile, cv.COLOR_BGR2RGB)
+        # standardize brightness
+        p = np.percentile(tile, 90)
+        tile = np.clip(tile * 255.0 / p, 0, 255).astype(np.uint8)
+        # get stain dictionnary
+        WisHisHisv = self._stain_dict_Vahadane(tile)
+
         while True:
             data = self._queue.get()
             if data is None:
@@ -107,7 +199,14 @@ class TileWorker(Process):
                         if PercentMasked >= (self._ROIpc / 100.0):
                             # if PercentMasked > 0.05:
                             # print("saving " + outfile)
-                            tile.save(outfile, quality=self._quality)
+                            try:
+                                self._write_normalized_image(
+                                    tile, outfile, WisHisHisv, self._quality
+                                )
+                                self._out_queue.put(outfile)
+                            except Warning:
+                                print("Skipping " + outfile)
+                                continue
                             # print(str(self.out_queue))
                             # print(str(self.out_queue.qsize()))
                             if bool(SaveMasks) == True:
@@ -384,6 +483,7 @@ class DeepZoomStaticTiler(object):
         SaveMasks,
         Mag,
         out_queue,
+        baseimage,
     ):
         self._slide = open_slide(slidepath)
         self._basename = basename
@@ -405,6 +505,7 @@ class DeepZoomStaticTiler(object):
         self._SaveMasks = SaveMasks
         self._Mag = Mag
         self.out_queue = out_queue
+        self._baseimage = baseimage
 
         for _i in range(workers):
             TileWorker(
@@ -416,6 +517,8 @@ class DeepZoomStaticTiler(object):
                 quality,
                 self._Bkg,
                 self._ROIpc,
+                self._baseimage,
+                self.out_queue,
             ).start()
 
     def run(self):
@@ -526,6 +629,7 @@ def slides_to_tiles(
     magnification: float,
     label_file: str,
     validation_split: float,
+    baseimage: str,
 ):
     # dict of {label: [list_of_samples_with_label]}
     sample_labels = {}
@@ -582,6 +686,7 @@ def slides_to_tiles(
                 False,  # savemasks
                 magnification,
                 train_queue,
+                baseimage,
             ).run()
             tile_path = train_queue.get()
             while tile_path:
@@ -619,6 +724,7 @@ def slides_to_tiles(
                 False,  # savemasks
                 magnification,
                 validation_queue,
+                baseimage,
             ).run()
             tile_path = validation_queue.get()
             while tile_path:

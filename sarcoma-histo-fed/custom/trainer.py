@@ -136,6 +136,7 @@ class SimpleTrainer(Executor):
             a new `Shareable` object to be submitted to server for aggregation.
         """
 
+        run = fl_ctx.get_run_number()
         # retrieve model weights download from server's shareable
         if abort_signal.triggered:
             return make_reply(ReturnCode.TASK_ABORTED)
@@ -157,10 +158,7 @@ class SimpleTrainer(Executor):
         valid = self.validation_ds.map(lambda file, pixels, label: (pixels, label))
 
         callbacks = []
-        if self.num_epoch_per_auc_calc:
-            callbacks.append(
-                SlideROCCallback(self.train_ds, self.validation_ds, self.num_epoch_per_auc_calc)
-            )
+        tensorboard_dir = None
         if self.tensorboard:
             kwargs = {}
             # why do this convoluted parsing?
@@ -176,7 +174,19 @@ class SimpleTrainer(Executor):
                     kwargs[k] = False
                 else:
                     kwargs[k] = v
+                    if k == "log_dir":
+                        tensorboard_dir = v
             callbacks.append(tf.keras.callbacks.TensorBoard(**kwargs))
+        if self.num_epoch_per_auc_calc:
+            callbacks.append(
+                SlideROCCallback(
+                    self.train_ds,
+                    self.validation_ds,
+                    self.num_epoch_per_auc_calc,
+                    tensorboard_dir,
+                    run,
+                )
+            )
 
         self.model.fit(
             train, epochs=self.epochs_per_round, validation_data=valid, callbacks=callbacks

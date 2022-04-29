@@ -35,6 +35,7 @@ from imageio import imread, imwrite
 from openslide import ImageSlide, open_slide
 from openslide.deepzoom import DeepZoomGenerator
 from PIL import Image, ImageDraw
+from tqdm import tqdm
 
 VIEWER_SLIDE_NAME = "slide"
 
@@ -635,7 +636,7 @@ def get_labelled_tiles(
 ):
     tile_list = []
     worker_queue = Queue()
-    for filename in slide_list:
+    for filename in tqdm(slide_list):
         basenameJPG = os.path.splitext(os.path.basename(filename))[0]
         logger.debug("processing: " + basenameJPG + " with extension: " + img_extension)
 

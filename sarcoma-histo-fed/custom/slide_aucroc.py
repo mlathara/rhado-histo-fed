@@ -1,4 +1,5 @@
 import logging
+import os
 
 import numpy as np
 import pandas as pd
@@ -40,11 +41,16 @@ def compute_roc_auc(dataset, model):
 
 
 class SlideROCCallback(tf.keras.callbacks.Callback):
-    def __init__(self, train, valid, num_epoch_per_auc_calc):
+    def __init__(self, train, valid, num_epoch_per_auc_calc, tensorboard_logdir, run):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.train = train
         self.valid = valid
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
+        self.writer = None
+        if tensorboard_logdir:
+            self.writer = tf.summary.create_file_writer(
+                os.path.join(tensorboard_logdir, "scalars", str(run), "metrics")
+            )
 
     def on_epoch_end(self, epoch, log={}):
         if epoch % self.num_epoch_per_auc_calc != 0:
@@ -52,6 +58,13 @@ class SlideROCCallback(tf.keras.callbacks.Callback):
         train_roc = compute_roc_auc(self.train, self.model)
         valid_roc = compute_roc_auc(self.valid, self.model)
 
+        if self.writer:
+            with self.writer.as_default():
+                # ideally step would include an offset to account for previous rounds
+                # but that doesn't seem to be visible to executors (tried appconstant CURRENT_ROUND)
+                # hopefully not an issue once we stream metrics back to server
+                tf.summary.scalar("slide-level training ROC-AUC", data=train_roc, step=epoch)
+                tf.summary.scalar("slide-level validation ROC-AUC", data=valid_roc, step=epoch)
         self.logger.info(
             "\nSlide-level train ROC-AUC: %.4f\nSlide-level valid ROC-AUC: %.4f\n"
             % (train_roc, valid_roc)

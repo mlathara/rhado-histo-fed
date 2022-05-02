@@ -51,7 +51,7 @@ Modification of the client config includes specifying a baseimage as shown here:
 
     "baseimage": "/path/to/baseimage.jpg"
     
-The baseimage can be selected from any image but it is suggested to be a good representation of a complete slide or tile that may represent the "norm" for staining used across all slides. 
+This file is used in the Vahadane color normalization process which aligns/normalizes all of the images across different color variations due to staining and scanning differences. The baseimage can be selected from any image but it is suggested to be a good representation of a complete slide or tile that may represent the "norm" across all of the user's slides. 
 
 ## Execution
 

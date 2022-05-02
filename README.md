@@ -47,6 +47,12 @@ Establish one server and one client and link configuration files
 
 Modify the config/json files located in sarcoma-histo-fed/sarcoma-histo-fed/config
 
+Modification of the client config includes specifying a baseimage as shown here:
+
+    "baseimage": "/path/to/baseimage.jpg"
+    
+The baseimage can be selected from any image but it is suggested to be a good representation of a complete slide or tile that may represent the "norm" for staining used across all slides. 
+
 ## Execution
 
 Process description: The client references local digital slides, which it tiles into smaller images. These images are in turn used by the client to train a local neural network model. After a user-defined number of epochs, the client passes the model weights back to the server, which aggregates all the client model weights into a single model. This single model is then used as the basis for the next round of training till the user-defined number of training rounds is completed.

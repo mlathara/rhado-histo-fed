@@ -16,8 +16,7 @@
     Overload of the node - may have memory issue if node is shared with other jobs.
 """
 
-from __future__ import print_function
-
+import logging
 import os
 import random
 import re
@@ -36,8 +35,11 @@ from imageio import imread, imwrite
 from openslide import ImageSlide, open_slide
 from openslide.deepzoom import DeepZoomGenerator
 from PIL import Image, ImageDraw
+from tqdm import tqdm
 
 VIEWER_SLIDE_NAME = "slide"
+
+logger = logging.getLogger(__name__)
 
 
 class TileWorker(Process):
@@ -57,6 +59,7 @@ class TileWorker(Process):
         out_queue,
     ):
         Process.__init__(self, name="TileWorker")
+        self.logger = logging.getLogger(self.__class__.__name__)
         self.daemon = True
         self._queue = queue
         self._slidepath = slidepath
@@ -205,7 +208,7 @@ class TileWorker(Process):
                                 )
                                 self._out_queue.put(outfile)
                             except Warning:
-                                print("Skipping " + outfile)
+                                self.logger.warn("Skipping " + outfile)
                                 continue
                             # print(str(self.out_queue))
                             # print(str(self.out_queue.qsize()))
@@ -239,8 +242,10 @@ class TileWorker(Process):
                     #    tile.save(outfile, quality=self._quality)
                     # print("%s empty: %f" %(outfile, avgBkg))
                 except:
-                    print(level, address)
-                    print("image %s failed at dz.get_tile for level %f" % (self._slidepath, level))
+                    self.logger.warn(level, address)
+                    self.logger.warn(
+                        "image %s failed at dz.get_tile for level %f" % (self._slidepath, level)
+                    )
                 finally:
                     self._queue.task_done()
 
@@ -275,6 +280,7 @@ class DeepZoomImageTiler(object):
         Mag,
         out_queue,
     ):
+        self.logger = logging.getLogger(self.__class__.__name__)
         self._dz = dz
         self._basename = basename
         self._basenameJPG = basenameJPG
@@ -419,13 +425,9 @@ class DeepZoomImageTiler(object):
         self._processed += 1
         count, total = self._processed, self._dz.tile_count
         if count % 100 == 0 or count == total:
-            print(
-                "Tiling %s: wrote %d/%d tiles" % (self._associated or "slide", count, total),
-                end="\r",
-                file=sys.stderr,
+            self.logger.debug(
+                "Tiling %s: wrote %d/%d tiles" % (self._associated or "slide", count, total)
             )
-            if count == total:
-                print(file=sys.stderr)
 
     def _write_dzi(self):
         with open("%s.dzi" % self._basename, "w") as fh:
@@ -453,7 +455,7 @@ class DeepZoomImageTiler(object):
             xml_valid = True
         except:
             xml_valid = False
-            print("error with minidom.parse(xmldir)")
+            self.logger.warn("error with minidom.parse(xmldir)")
             return [], xml_valid, 1.0
 
         return mask, xml_valid, Img_Fact
@@ -618,6 +620,62 @@ def get_train_valid_split(files: list, sample_labels: dict, validation_split: fl
     return train_files, validation_files
 
 
+def get_labelled_tiles(
+    slide_list: list,
+    output_dir: str,
+    sample_labels: dict,
+    labels_map: dict,
+    tile_size: int,
+    overlap: int,
+    quality: int,
+    workers: int,
+    background: float,
+    img_extension: str,
+    magnification: float,
+    baseimage: str,
+):
+    tile_list = []
+    worker_queue = Queue()
+    for filename in tqdm(slide_list):
+        basenameJPG = os.path.splitext(os.path.basename(filename))[0]
+        logger.debug("processing: " + basenameJPG + " with extension: " + img_extension)
+
+        sample_class = get_sample_label(basenameJPG, sample_labels)
+        output = os.path.join(output_dir, sample_class, basenameJPG)
+        try:
+            # if True:
+            DeepZoomStaticTiler(
+                filename,
+                output,
+                "jpeg",  # format
+                tile_size,
+                overlap,
+                True,  # limit_bounds
+                quality,
+                workers,
+                False,  # with_viewer
+                background,
+                basenameJPG,
+                "",  # xml file
+                1,  # mask_type
+                0,  # ROIpc
+                "",  # o label
+                img_extension,
+                False,  # savemasks
+                magnification,
+                worker_queue,
+                baseimage,
+            ).run()
+            tile_path = worker_queue.get()
+            while tile_path:
+                tile_list.append((tile_path, labels_map[sample_class]))
+                tile_path = worker_queue.get()
+        except:
+            logger.warn("Failed to process file %s, error: %s" % (filename, sys.exc_info()[0]))
+
+    return tile_list
+
+
 def slides_to_tiles(
     slidepath: str,
     overlap: int,
@@ -640,7 +698,7 @@ def slides_to_tiles(
 
     labels = list(sample_labels.keys())
     labels_map = {key: idx for idx, key in enumerate(labels)}
-    print("Found classes: " + str(labels_map))
+    logger.info("Found classes: " + str(labels_map))
     for l in labels:
         label_dir = os.path.join(output_base, l)
         os.makedirs(label_dir, exist_ok=True)
@@ -648,95 +706,38 @@ def slides_to_tiles(
     files = glob(slidepath)
     # ImgExtension = os.path.splitext(slidepath)[1]
     ImgExtension = slidepath.split("*")[-1]
-    print(slidepath)
-    print(files)
-    print("***********************")
+    logger.debug(files)
     train_slides, validation_slides = get_train_valid_split(files, sample_labels, validation_split)
 
-    train_queue = Queue()
-    validation_queue = Queue()
-    train_tiles = []
-    validation_tiles = []
-    print("Creating training tiles")
-    for filename in train_slides:
-        basenameJPG = os.path.splitext(os.path.basename(filename))[0]
-        print("processing: " + basenameJPG + " with extension: " + ImgExtension)
+    logger.info("Creating training tiles")
+    train_tiles = get_labelled_tiles(
+        train_slides,
+        output_base,
+        sample_labels,
+        labels_map,
+        tile_size,
+        overlap,
+        quality,
+        workers,
+        background,
+        ImgExtension,
+        magnification,
+        baseimage,
+    )
+    logger.info("Creating validation tiles")
+    validation_tiles = get_labelled_tiles(
+        validation_slides,
+        output_base,
+        sample_labels,
+        labels_map,
+        tile_size,
+        overlap,
+        quality,
+        workers,
+        background,
+        ImgExtension,
+        magnification,
+        baseimage,
+    )
 
-        sample_class = get_sample_label(basenameJPG, sample_labels)
-        output = os.path.join(output_base, sample_class, basenameJPG)
-        try:
-            # if True:
-            DeepZoomStaticTiler(
-                filename,
-                output,
-                "jpeg",  # format
-                tile_size,
-                overlap,
-                True,  # limit_bounds
-                quality,
-                workers,
-                False,  # with_viewer
-                background,
-                basenameJPG,
-                "",  # xml file
-                1,  # mask_type
-                0,  # ROIpc
-                "",  # o label
-                ImgExtension,
-                False,  # savemasks
-                magnification,
-                train_queue,
-                baseimage,
-            ).run()
-            tile_path = train_queue.get()
-            while tile_path:
-                train_tiles.append((tile_path, labels_map[sample_class]))
-                tile_path = train_queue.get()
-        except:
-            print("Failed to process file %s, error: %s" % (filename, sys.exc_info()[0]))
-
-    print("Creating validation tiles")
-    for filename in validation_slides:
-        basenameJPG = os.path.splitext(os.path.basename(filename))[0]
-        print("processing: " + basenameJPG + " with extension: " + ImgExtension)
-
-        sample_class = get_sample_label(basenameJPG, sample_labels)
-        output = os.path.join(output_base, sample_class, basenameJPG)
-        try:
-            # if True:
-            DeepZoomStaticTiler(
-                filename,
-                output,
-                "jpeg",  # format
-                tile_size,
-                overlap,
-                True,  # limit_bounds
-                quality,
-                workers,
-                False,  # with_viewer
-                background,
-                basenameJPG,
-                "",  # xml file
-                1,  # mask_type
-                0,  # ROIpc
-                "",  # o label
-                ImgExtension,
-                False,  # savemasks
-                magnification,
-                validation_queue,
-                baseimage,
-            ).run()
-            tile_path = validation_queue.get()
-            while tile_path:
-                validation_tiles.append((tile_path, labels_map[sample_class]))
-                tile_path = validation_queue.get()
-        except:
-            print("Failed to process file %s, error: %s" % (filename, sys.exc_info()[0]))
-    """
-    dz_queue.join()
-    for i in range(opts.max_number_processes):
-        dz_queue.put( None )
-    """
-
-    print("End")
     return len(labels), train_tiles, validation_tiles

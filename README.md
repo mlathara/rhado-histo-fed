@@ -45,17 +45,24 @@ Establish one server and one client and link configuration files
     poc -n 1
     ln -s ~/fed-sarcoma/sarcoma-histo-fed poc/admin/transfer
 
-Modify the config/json files located in sarcoma-histo-fed/sarcoma-histo-fed/config
+Modify the config/json template files located in sarcoma-histo-fed/sarcoma-histo-fed/config
 
 Modification of the client config includes specifying a baseimage as shown here:
 
-    "baseimage": "/path/to/baseimage.jpg"
+    "baseimage": "name-of-environment-variable-with-path-to-baseimage"
     
 This file is used in the Vahadane color normalization process which aligns/normalizes all of the images across different color variations due to staining and scanning differences. The baseimage can be selected from any image but it is suggested to be a good representation of a complete slide or tile that may represent the "norm" across all of the user's slides. 
 
 ## Execution
 
 Process description: The client references local digital slides, which it tiles into smaller images. These images are in turn used by the client to train a local neural network model. After a user-defined number of epochs, the client passes the model weights back to the server, which aggregates all the client model weights into a single model. This single model is then used as the basis for the next round of training till the user-defined number of training rounds is completed.
+
+For each client (only a single client is shown below), first set the appropriate environment variable to point to the location of the input dataset, and the baseimage. The names of the environment variable should also be reflected in the client config json files. For instance:
+
+    export SARCOMA_HISTO_FED_DATASET_DIR=/path/to/parent/dir/with/dataset/and/labels/
+    export SARCOMA_HISTO_FED_BASEIMAGE=/path/to/baseimage
+
+Note that if multiple clients are being used, each can have different values for the environment variables. As such, it may be easiest to include the above `export` commands into an env file within each `poc/site-x/startup` folders and then using `source` to ensure that the appropriate environment variables are set during client startup.
 
 Start the server, the client, and the admin in 3 separate terminals (ensuring you have the venv activated via source venv/bin/activate):
 

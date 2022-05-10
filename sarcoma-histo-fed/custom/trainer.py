@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 from network import build_model
 from nvflare.apis.dxo import DXO, DataKind, from_shareable
@@ -51,10 +53,11 @@ class SimpleTrainer(Executor):
     def __init__(
         self,
         epochs_per_round: int,
-        slidepath: str,
+        dataset_path_env_var: str,
+        slideextension: str,
         overlap: int,
         workers: int,
-        output_base: str,
+        output_folder: str,
         quality: int,
         tile_size: int,
         background: float,
@@ -67,23 +70,30 @@ class SimpleTrainer(Executor):
         baseimage: str,
     ):
         super().__init__()
+        dataset_dir = os.getenv(dataset_path_env_var)
+        if not dataset_dir:
+            raise RuntimeError(
+                dataset_path_env_var
+                + " environment variable was not set. "
+                + "Please set it to the path where dataset can be found"
+            )
         self.epochs_per_round = epochs_per_round
         self.train_ds = None
         self.validation_ds = None
         self.model = None
-        self.slidepath = slidepath
+        self.slidepath = os.path.join(dataset_dir, "*" + slideextension)
         self.overlap = overlap
         self.workers = workers
-        self.output_base = output_base
+        self.output_base = os.path.join(dataset_dir, output_folder)
         self.quality = quality
         self.tile_size = tile_size
         self.background = background
         self.magnification = magnification
-        self.labels_file = labels_file
+        self.labels_file = os.path.join(dataset_dir, labels_file)
         self.validation_split = validation_split
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
         self.tensorboard = tensorboard
-        self.baseimage = baseimage
+        self.baseimage = os.getenv(baseimage)
         if flipmode not in ["horizontal", "vertical", "horizontal_and_vertical"]:
             self.flipmode = None
         else:

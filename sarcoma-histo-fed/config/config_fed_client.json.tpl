@@ -8,21 +8,22 @@
       "executor": {
         "path": "trainer.SimpleTrainer",
         "args": {
+          "dataset_path_env_var": "environment-variable-for-parent-dir-of-dataset",
           "epochs_per_round": 2,
-          "slidepath": "/path/to/slides/*svs",
+          "slideextension": "svs",
           "overlap": 0,
           "workers": 32,
-          "output_base": "/path/to/output/tiles",
+          "output_folder": "name-of-subdir-within-dataset-parent-dir-to-store-generated-tiles",
           "quality": 90,
           "tile_size": 299,
           "background": 25,
           "magnification": 5,
-          "labels_file": "/path/to/labels",
+          "labels_file": "name-of-labels-file-within-dataset-parent-dir",
           "validation_split": 0.2,
           "flipmode": "horizontal_and_vertical",
           "num_epoch_per_auc_calc": 0,
           "tensorboard": "string-of-comma-separated-tensorboard-kwargs",
-          "baseimage": "/path/to/baseimage.jpg"
+          "baseimage": "environment-variable-with-path-to-baseimage"
         }
       }
     }

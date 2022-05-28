@@ -475,7 +475,6 @@ class DeepZoomStaticTiler(object):
         limit_bounds,
         quality,
         workers,
-        augment_tiles,
         with_viewer,
         Bkg,
         basenameJPG,
@@ -500,7 +499,6 @@ class DeepZoomStaticTiler(object):
         self._limit_bounds = limit_bounds
         self._queue = JoinableQueue(2 * workers)
         self._workers = workers
-        self._augment_tiles = augment_tiles
         self._with_viewer = with_viewer
         self._Bkg = Bkg
         self._ROIpc = ROIpc
@@ -632,7 +630,6 @@ def get_labelled_tiles(
     overlap: int,
     quality: int,
     workers: int,
-    augment_tiles: bool,
     background: float,
     img_extension: str,
     magnification: float,
@@ -657,7 +654,6 @@ def get_labelled_tiles(
                 True,  # limit_bounds
                 quality,
                 workers,
-                augment_tiles,
                 False,  # with_viewer
                 background,
                 basenameJPG,
@@ -725,7 +721,6 @@ def slides_to_tiles(
         overlap,
         quality,
         workers,
-        augment_tiles,
         background,
         ImgExtension,
         magnification,
@@ -765,7 +760,6 @@ def slides_to_tiles(
         overlap,
         quality,
         workers,
-        augment_tiles,
         background,
         ImgExtension,
         magnification,
@@ -796,11 +790,9 @@ def calc_augmentation_factor(class_by_tile_count_dict):
 
     # loop through to find the smallest num of tiles
     smallest_num_tiles = 0
-    label_with_least_tiles = ""
     for key, value in class_by_tile_count_dict.items():
         if smallest_num_tiles == 0 or value < smallest_num_tiles:
             smallest_num_tiles = value
-            label_with_least_tiles = key
 
     # once we have the smallest number of tiles
     # loop through the dictionary to set the augmentation_factor
@@ -810,9 +802,7 @@ def calc_augmentation_factor(class_by_tile_count_dict):
         else:
             # calculate the augmentation factor
             # TODO issue with round function in python3
-            augmentation_factor = round(
-                class_by_tile_count_dict[label_with_least_tiles] * 8 / value
-            )
+            augmentation_factor = round(smallest_num_tiles * 8 / value)
             new_class_by_tile_count_dict[key] = [value, augmentation_factor]
 
     return new_class_by_tile_count_dict

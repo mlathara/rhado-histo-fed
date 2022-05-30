@@ -733,22 +733,22 @@ def slides_to_tiles(
     # {0: 483, 1: 1120, 2: 197}
     # Class 0 has 483 tiles, Class 1 has 1120 tiles...
 
+    smallest_num_tiles = sys.maxsize
     class_by_tile_count_dict = dict()
     for key, val in groupby(sorted(train_tiles, key=lambda ele: ele[1]), key=lambda ele: ele[1]):
-        class_by_tile_count_dict[key] = len([ele[0] for ele in val])
+        num_tiles = len([ele[0] for ele in val])
+        class_by_tile_count_dict[key] = num_tiles
+        if num_tiles < smallest_num_tiles:
+            smallest_num_tiles = num_tiles
 
-    # print(class_by_tile_count_dict)
-
-    new_class_by_tile_count_dict = calc_augmentation_factor(class_by_tile_count_dict)
-
-    # print(new_class_by_tile_count_dict)
+    new_class_by_tile_count_dict = calc_augmentation_factor(
+        class_by_tile_count_dict, smallest_num_tiles
+    )
 
     if augment_tiles:
-        # print(len(train_tiles))
         # augment tiles and add directly to train_tiles
         logger.info("Augmenting Tiles")
         augment_tiles_based_on_factor(train_tiles, new_class_by_tile_count_dict)
-        # print(len(train_tiles))
 
     logger.info("Creating validation tiles")
     validation_tiles = get_labelled_tiles(
@@ -785,16 +785,9 @@ def slides_to_tiles(
 # and the numbers in the value are the total
 # number of tiles for each class
 #
-def calc_augmentation_factor(class_by_tile_count_dict):
+def calc_augmentation_factor(class_by_tile_count_dict, smallest_num_tiles):
     new_class_by_tile_count_dict = {}
 
-    # loop through to find the smallest num of tiles
-    smallest_num_tiles = 0
-    for key, value in class_by_tile_count_dict.items():
-        if smallest_num_tiles == 0 or value < smallest_num_tiles:
-            smallest_num_tiles = value
-
-    # once we have the smallest number of tiles
     # loop through the dictionary to set the augmentation_factor
     for key, value in class_by_tile_count_dict.items():
         if value == smallest_num_tiles:
@@ -821,17 +814,21 @@ def augment_tiles_based_on_factor(tiles_list, class_by_tile_count_dict):
 
         for i in range(1, augmentation_factor):
             rotate = (90 * i) % 360
-            new_img = rotate_and_mirror_tile(img, rotate, i > 3)
-            # Save the new image
+            # build new file name
             file_name = tile[0]
             idx = file_name.rfind(".")
             mirror = ""
             if str(i > 3):
                 mirror = "_mirror"
             file_name = file_name[:idx] + "_" + str(rotate) + mirror + file_name[idx:]
-            new_img.save(file_name)
-            # append to original list
-            new_list.append((file_name, label))
+
+            # skip the processing if the file already exists
+            if not os.path.exists(file_name):
+                new_img = rotate_and_mirror_tile(img, rotate, i > 3)
+                # Save the new image
+                new_img.save(file_name)
+                # append to original list
+                new_list.append((file_name, label))
 
     tiles_list.extend(new_list)
     return

@@ -822,13 +822,14 @@ def augment_tiles_based_on_factor(tiles_list, class_by_tile_count_dict):
                 mirror = "_mirror"
             file_name = file_name[:idx] + "_" + str(rotate) + mirror + file_name[idx:]
 
-            # skip the processing if the file already exists
+            # skip the image processing if the augmented file already exists
             if not os.path.exists(file_name):
                 new_img = rotate_and_mirror_tile(img, rotate, i > 3)
                 # Save the new image
                 new_img.save(file_name)
-                # append to original list
-                new_list.append((file_name, label))
+
+            # append to original list
+            new_list.append((file_name, label))
 
     tiles_list.extend(new_list)
     return

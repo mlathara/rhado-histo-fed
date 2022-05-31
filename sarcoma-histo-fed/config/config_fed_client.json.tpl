@@ -13,6 +13,7 @@
           "slideextension": "svs",
           "overlap": 0,
           "workers": 32,
+          "augment_tiles": true,
           "output_folder": "name-of-subdir-within-dataset-parent-dir-to-store-generated-tiles",
           "quality": 90,
           "tile_size": 299,

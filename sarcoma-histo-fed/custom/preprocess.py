@@ -23,6 +23,7 @@ import re
 import shutil
 import sys
 from glob import glob
+from itertools import groupby
 from multiprocessing import JoinableQueue, Process, Queue
 from optparse import OptionParser
 from unicodedata import normalize
@@ -680,6 +681,7 @@ def slides_to_tiles(
     slidepath: str,
     overlap: int,
     workers: int,
+    augment_tiles: bool,
     output_base: str,
     quality: int,
     tile_size: int,
@@ -724,6 +726,30 @@ def slides_to_tiles(
         magnification,
         baseimage,
     )
+
+    # create a dictionary of the class with the total number of tiles per
+    # class
+    # class_by_tile_count_dict contains a dict - for example
+    # {0: 483, 1: 1120, 2: 197}
+    # Class 0 has 483 tiles, Class 1 has 1120 tiles...
+
+    smallest_num_tiles = sys.maxsize
+    class_by_tile_count_dict = dict()
+    for key, val in groupby(sorted(train_tiles, key=lambda ele: ele[1]), key=lambda ele: ele[1]):
+        num_tiles = len([ele[0] for ele in val])
+        class_by_tile_count_dict[key] = num_tiles
+        if num_tiles < smallest_num_tiles:
+            smallest_num_tiles = num_tiles
+
+    new_class_by_tile_count_dict = calc_augmentation_factor(
+        class_by_tile_count_dict, smallest_num_tiles
+    )
+
+    if augment_tiles:
+        # augment tiles and add directly to train_tiles
+        logger.info("Augmenting Tiles")
+        augment_tiles_based_on_factor(train_tiles, new_class_by_tile_count_dict)
+
     logger.info("Creating validation tiles")
     validation_tiles = get_labelled_tiles(
         validation_slides,
@@ -741,3 +767,79 @@ def slides_to_tiles(
     )
 
     return len(labels), train_tiles, validation_tiles
+
+
+# This function will return a similar
+# dict to the input but with an augmentation/
+# mutliplication factor. The multiplication factor
+# is used to normalize the number of tiles across
+# classes
+#
+# For example, the result:
+# {0: [512, 8], 1: [1883, 2], 2: [484, 8]}
+# where Class 0 has 512 tiles and an augmentation factor of 8
+#
+# Pass in dict as such
+# {0: 483, 1: 1120, 2: 197}
+# where 0, 1, and 2 are the class enums
+# and the numbers in the value are the total
+# number of tiles for each class
+#
+def calc_augmentation_factor(class_by_tile_count_dict, smallest_num_tiles):
+    new_class_by_tile_count_dict = {}
+
+    # loop through the dictionary to set the augmentation_factor
+    for key, value in class_by_tile_count_dict.items():
+        if value == smallest_num_tiles:
+            new_class_by_tile_count_dict[key] = [value, 8]  # 8 is the max augmentation factor
+        else:
+            # calculate the augmentation factor
+            # TODO issue with round function in python3
+            augmentation_factor = round(smallest_num_tiles * 8 / value)
+            new_class_by_tile_count_dict[key] = [value, augmentation_factor]
+
+    return new_class_by_tile_count_dict
+
+
+# This function augments the original tile based
+# on the augmentation factor and will rotate and mirror
+# the image (and save it) based on the augmentation factor
+def augment_tiles_based_on_factor(tiles_list, class_by_tile_count_dict):
+    new_list = []
+    for tile in tiles_list:
+        file_name = tile[0]
+        img = Image.open(file_name)
+        label = tile[1]  # get the label for the tile
+        augmentation_factor = class_by_tile_count_dict[label][1]
+
+        for i in range(1, augmentation_factor):
+            rotate = (90 * i) % 360
+            # build new file name
+            file_name = tile[0]
+            idx = file_name.rfind(".")
+            mirror = ""
+            if str(i > 3):
+                mirror = "_mirror"
+            file_name = file_name[:idx] + "_" + str(rotate) + mirror + file_name[idx:]
+
+            # skip the image processing if the augmented file already exists
+            if not os.path.exists(file_name):
+                new_img = rotate_and_mirror_tile(img, rotate, i > 3)
+                # Save the new image
+                new_img.save(file_name)
+
+            # append to original list
+            new_list.append((file_name, label))
+
+    tiles_list.extend(new_list)
+    return
+
+
+def rotate_and_mirror_tile(img, degrees, mirror=False):
+
+    new_image = img.rotate(degrees, expand=True)
+
+    if mirror:
+        new_image = new_image.transpose(Image.FLIP_LEFT_RIGHT)
+
+    return new_image

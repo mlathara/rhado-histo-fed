@@ -57,6 +57,7 @@ class SimpleTrainer(Executor):
         slideextension: str,
         overlap: int,
         workers: int,
+        augment_tiles: bool,
         output_folder: str,
         quality: int,
         tile_size: int,
@@ -84,6 +85,7 @@ class SimpleTrainer(Executor):
         self.slidepath = os.path.join(dataset_dir, "*" + slideextension)
         self.overlap = overlap
         self.workers = workers
+        self.augment_tiles = augment_tiles
         self.output_base = os.path.join(dataset_dir, output_folder)
         self.quality = quality
         self.tile_size = tile_size
@@ -108,6 +110,7 @@ class SimpleTrainer(Executor):
             self.slidepath,
             self.overlap,
             self.workers,
+            self.augment_tiles,
             self.output_base,
             self.quality,
             self.tile_size,

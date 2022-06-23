@@ -27,6 +27,12 @@
       "args": {
         "expected_data_kind": "WEIGHTS"
       }
+    },
+    {
+      "id": "tb_analytics_receiver",
+      "path": "nvflare.app_common.pt.tb_receiver.TBAnalyticsReceiver",
+      "name": "TBAnalyticsReceiver",
+      "args": {"events": ["fed.analytix_log_stats"]}
     }
   ],
   "workflows": [

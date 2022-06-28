@@ -7,3 +7,5 @@ pandas==1.4.2
 opencv-python==4.3.0.38
 spams==2.6.3.1
 tqdm==4.64.0
+# pinning protobuf because https://github.com/protocolbuffers/protobuf/issues/10051
+protobuf==3.20.1

@@ -1,6 +1,7 @@
+import logging
 import os
 import shutil
-from tempfile import TemporaryDirectory
+from tempfile import mkdtemp
 
 import tensorflow as tf
 from network import build_model
@@ -11,6 +12,8 @@ from nvflare.apis.fl_constant import ReturnCode
 from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable, make_reply
 from nvflare.apis.signal import Signal
+from nvflare.app_common.app_constant import AppConstants
+from nvflare.apis.fl_constant import EventScope, FLContextKey
 from preprocess import slides_to_tiles
 from slide_aucroc import SlideROCCallback
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
@@ -34,8 +37,8 @@ def get_dataset(files, batch_size, num_classes):
             paths.extend([t for t in tiles_list])
             # either we make arrays out of the label elements
             # or we have to tf.reshape the one_hot vectors later
-            labels.extend([[label]]*len(tiles_list))
-            filenames.extend([slide]*len(tiles_list))
+            labels.extend([[label]] * len(tiles_list))
+            filenames.extend([slide] * len(tiles_list))
 
     # convert filenames to integer ids for later reduction
     tempdict = {}
@@ -107,6 +110,7 @@ class SimpleTrainer(Executor):
         self.baseimage = os.getenv(baseimage)
         self.analytic_sender_id = analytic_sender_id
         self.labels_map = labels_map
+        self.current_round = None
         if flipmode not in ["horizontal", "vertical", "horizontal_and_vertical"]:
             self.flipmode = None
         else:
@@ -118,19 +122,47 @@ class SimpleTrainer(Executor):
         elif event_type == EventType.AFTER_TASK_EXECUTION:
             self.send_federated_events(fl_ctx)
 
+    def add_to_writer(self, fl_ctx, writer, tag, get_tag_func, prefix):
+        step_offset = self.current_round * self.epochs_per_round
+        for element in tag:
+            for _, step, tensor in get_tag_func(element):
+                array = tf.make_ndarray(tensor)
+                if array.size != 1:
+                    raise RuntimeError(
+                        "Only scalars are supported as metrics for fed events\n"
+                        + "Metric: %s, shape: %s" % (element, array.shape)
+                    )
+                elif not isinstance(array.item(0), float):
+                    # graphs, etc are not supported
+                    self.log_warning(
+                        fl_ctx,
+                        "Metric %s had type %s. Expected float"
+                        % (element, str(type(array.item(0))))
+                    )
+                else:
+                    writer.add_scalar(
+                        prefix + element,
+                        array.item(0),
+                        global_step=step_offset + step,
+                    )
+
     def send_federated_events(self, fl_ctx: FLContext):
+        self.log_debug(fl_ctx, "Sending fed events")
         engine = fl_ctx.get_engine()
         writer = engine.get_component(self.analytic_sender_id)
-        event_acc = EventAccumulator(self.tensorboard["log_dir"])
-        event_acc.Reload()
-        tags = event_acc.Tags()
-        # for now, we're only sending scalars
-        for scalar in tags["scalars"]:
-            print("Sending scalar tag: " + str(scalar) + " len: " + len(event_acc.Scalars(scalar)))
-            for _, step, tensor in event_acc.Scalars(scalar):
-                array = tf.make_ndarray(tensor)
-                # TODO not sure there is any way to make step global in the client
-                writer.add_scalar(scalar, array.item(0))
+        for subdir, dirs, _files in os.walk(self.tensorboard["log_dir"]):
+            if not dirs:
+                event_acc = EventAccumulator(subdir)
+                event_acc.Reload()
+                tags = event_acc.Tags()
+                if subdir.strip("/").endswith("validation"):
+                    prefix = "validation_"
+                elif subdir.strip("/").endswith("train"):
+                    prefix = "train_"
+                else:
+                    prefix = ""
+                self.add_to_writer(fl_ctx, writer, tags["scalars"], event_acc.Scalars, prefix)
+                self.add_to_writer(fl_ctx, writer, tags["tensors"], event_acc.Tensors, prefix)
 
         shutil.rmtree(self.tensorboard["log_dir"])
 
@@ -180,7 +212,7 @@ class SimpleTrainer(Executor):
             a new `Shareable` object to be submitted to server for aggregation.
         """
 
-        run = fl_ctx.get_run_number()
+        self.current_round = int(shareable.get_header(AppConstants.CURRENT_ROUND))
         # retrieve model weights download from server's shareable
         if abort_signal.triggered:
             return make_reply(ReturnCode.TASK_ABORTED)
@@ -207,7 +239,7 @@ class SimpleTrainer(Executor):
             if "log_dir" in self.tensorboard:
                 tensorboard_dir = self.tensorboard["log_dir"]
             else:
-                tensorboard_dir = TemporaryDirectory().name
+                tensorboard_dir = mkdtemp()
                 self.tensorboard["log_dir"] = tensorboard_dir
             callbacks.append(tf.keras.callbacks.TensorBoard(**self.tensorboard))
         if self.num_epoch_per_auc_calc:
@@ -217,7 +249,6 @@ class SimpleTrainer(Executor):
                     self.validation_ds,
                     self.num_epoch_per_auc_calc,
                     tensorboard_dir,
-                    run,
                 )
             )
 

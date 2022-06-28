@@ -29,9 +29,9 @@
       }
     },
     {
-      "id": "tb_analytics_receiver",
-      "path": "nvflare.app_common.pt.tb_receiver.TBAnalyticsReceiver",
-      "name": "TBAnalyticsReceiver",
+      "id": "tf_analytics_receiver",
+      "path": "tf_analytics_receiver.TFAnalyticsReceiver",
+      "name": "TFAnalyticsReceiver",
       "args": {"events": ["fed.analytix_log_stats"]}
     }
   ],

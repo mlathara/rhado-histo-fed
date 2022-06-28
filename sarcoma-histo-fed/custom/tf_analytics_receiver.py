@@ -57,17 +57,22 @@ class TFAnalyticsReceiver(AnalyticsReceiver):
             writer = tf.summary.create_file_writer(peer_log_dir)
             self.writers_table[record_origin] = writer
 
-        for k, v in dxo.data.items():
-            self.log_debug(
-                fl_ctx, f"save tag {k} and value {v} from {record_origin}", fire_event=False
-            )
-            with writer.as_default():
+        with writer.as_default():
+            for k, v in dxo.data.items():
+                self.log_debug(
+                    fl_ctx, f"save tag {k} and value {v} from {record_origin}", fire_event=False
+                )
                 if (
                     not isinstance(analytic_data.kwargs, dict)
                     or "global_step" not in analytic_data.kwargs
                 ):
                     self.log_error(
-                        "Federated event should contain global_step. Found type: %s, contents: %s"
-                        % (type(analytic_data.kwargs), str(analytic_data.kwargs))
+                        fl_ctx,
+                        "Federated event should contain global_step. Using 0. Found type: %s, contents: %s key: %s"
+                        % (type(analytic_data.kwargs), str(analytic_data.kwargs), k),
                     )
-                tf.summary.scalar(k, v, step=analytic_data.kwargs["global_step"])
+                    # nvflare analytics_sender has a small bug that doesn't send global_step if it is zero
+                    # so we'll assume zero here if we don't find global_step
+                    tf.summary.scalar(k, v, step=0)
+                else:
+                    tf.summary.scalar(k, v, step=analytic_data.kwargs["global_step"])

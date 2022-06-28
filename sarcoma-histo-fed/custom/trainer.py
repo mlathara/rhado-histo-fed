@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 from tempfile import mkdtemp
@@ -13,7 +12,6 @@ from nvflare.apis.fl_context import FLContext
 from nvflare.apis.shareable import Shareable, make_reply
 from nvflare.apis.signal import Signal
 from nvflare.app_common.app_constant import AppConstants
-from nvflare.apis.fl_constant import EventScope, FLContextKey
 from preprocess import slides_to_tiles
 from slide_aucroc import SlideROCCallback
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
@@ -107,6 +105,13 @@ class SimpleTrainer(Executor):
         self.validation_split = validation_split
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
         self.tensorboard = tensorboard
+        if self.tensorboard:
+            if "log_dir" in self.tensorboard:
+                tensorboard_dir = self.tensorboard["log_dir"]
+            else:
+                tensorboard_dir = mkdtemp()
+                self.tensorboard["log_dir"] = tensorboard_dir
+
         self.baseimage = os.getenv(baseimage)
         self.analytic_sender_id = analytic_sender_id
         self.labels_map = labels_map
@@ -137,7 +142,7 @@ class SimpleTrainer(Executor):
                     self.log_warning(
                         fl_ctx,
                         "Metric %s had type %s. Expected float"
-                        % (element, str(type(array.item(0))))
+                        % (element, str(type(array.item(0)))),
                     )
                 else:
                     writer.add_scalar(
@@ -236,11 +241,6 @@ class SimpleTrainer(Executor):
         callbacks = []
         tensorboard_dir = None
         if self.tensorboard:
-            if "log_dir" in self.tensorboard:
-                tensorboard_dir = self.tensorboard["log_dir"]
-            else:
-                tensorboard_dir = mkdtemp()
-                self.tensorboard["log_dir"] = tensorboard_dir
             callbacks.append(tf.keras.callbacks.TensorBoard(**self.tensorboard))
         if self.num_epoch_per_auc_calc:
             callbacks.append(

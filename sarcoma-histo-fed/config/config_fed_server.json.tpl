@@ -27,6 +27,12 @@
       "args": {
         "expected_data_kind": "WEIGHTS"
       }
+    },
+    {
+      "id": "tf_analytics_receiver",
+      "path": "tf_analytics_receiver.TFAnalyticsReceiver",
+      "name": "TFAnalyticsReceiver",
+      "args": {"events": ["fed.analytix_log_stats"]}
     }
   ],
   "workflows": [

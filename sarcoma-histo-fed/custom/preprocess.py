@@ -22,10 +22,9 @@ import random
 import re
 import shutil
 import sys
+import traceback
 from glob import glob
-from itertools import groupby
 from multiprocessing import JoinableQueue, Process, Queue
-from optparse import OptionParser
 from unicodedata import normalize
 
 import cv2 as cv
@@ -35,7 +34,7 @@ import spams
 from imageio import imread, imwrite
 from openslide import ImageSlide, open_slide
 from openslide.deepzoom import DeepZoomGenerator
-from PIL import Image, ImageDraw
+from PIL import Image
 from tqdm import tqdm
 
 VIEWER_SLIDE_NAME = "slide"
@@ -635,7 +634,13 @@ def get_labelled_tiles(
     magnification: float,
     baseimage: str,
 ):
-    tile_list = []
+    # using nested dict instead of list here
+    # specifically we'll store dict[dict[list[<paths>]]]
+    # outermost dict is labels, then dict of slides, and each of those is a list of tiles
+    # should be more efficient to do this, than to store a list of
+    #   (tilename, label, slidename)
+    # which incurs a lot of bloat/repetition for label and slidename
+    tile_dict = {v: {} for _, v in labels_map.items()}
     worker_queue = Queue()
     for filename in tqdm(slide_list):
         basenameJPG = os.path.splitext(os.path.basename(filename))[0]
@@ -668,13 +673,15 @@ def get_labelled_tiles(
                 baseimage,
             ).run()
             tile_path = worker_queue.get()
+            tile_list = tile_dict[labels_map[sample_class]].setdefault(basenameJPG, [])
             while tile_path:
-                tile_list.append((tile_path, labels_map[sample_class]))
+                tile_list.append(tile_path)
                 tile_path = worker_queue.get()
-        except:
-            logger.warn("Failed to process file %s, error: %s" % (filename, sys.exc_info()[0]))
+        except Exception as e:
+            stacktrace = "".join(traceback.TracebackException.from_exception(e).format())
+            logger.warn("Failed to process file %s, error: %s" % (filename, stacktrace))
 
-    return tile_list
+    return tile_dict
 
 
 def slides_to_tiles(
@@ -688,6 +695,7 @@ def slides_to_tiles(
     background: float,
     magnification: float,
     label_file: str,
+    labels_map: dict,
     validation_split: float,
     baseimage: str,
 ):
@@ -696,12 +704,14 @@ def slides_to_tiles(
     with open(label_file, "r") as labelfile:
         for line in labelfile:
             sample, label = line.split(maxsplit=1)
+            label = label.strip()
+            if label not in labels_map:
+                raise RuntimeError(
+                    f"{sample} has unknown label {label}. Label map is: {labels_map}"
+                )
             sample_labels.setdefault(label.strip(), []).append(sample)
 
-    labels = list(sample_labels.keys())
-    labels_map = {key: idx for idx, key in enumerate(labels)}
-    logger.info("Found classes: " + str(labels_map))
-    for l in labels:
+    for l, _ in labels_map.items():
         label_dir = os.path.join(output_base, l)
         os.makedirs(label_dir, exist_ok=True)
     # get  images from the data/ file.
@@ -735,9 +745,9 @@ def slides_to_tiles(
 
     smallest_num_tiles = sys.maxsize
     class_by_tile_count_dict = dict()
-    for key, val in groupby(sorted(train_tiles, key=lambda ele: ele[1]), key=lambda ele: ele[1]):
-        num_tiles = len([ele[0] for ele in val])
-        class_by_tile_count_dict[key] = num_tiles
+    for label, slides in train_tiles.items():
+        num_tiles = sum([len(tiles) for _, tiles in slides.items()])
+        class_by_tile_count_dict[label] = num_tiles
         if num_tiles < smallest_num_tiles:
             smallest_num_tiles = num_tiles
 
@@ -766,7 +776,7 @@ def slides_to_tiles(
         baseimage,
     )
 
-    return len(labels), train_tiles, validation_tiles
+    return train_tiles, validation_tiles
 
 
 # This function will return a similar
@@ -804,34 +814,35 @@ def calc_augmentation_factor(class_by_tile_count_dict, smallest_num_tiles):
 # This function augments the original tile based
 # on the augmentation factor and will rotate and mirror
 # the image (and save it) based on the augmentation factor
-def augment_tiles_based_on_factor(tiles_list, class_by_tile_count_dict):
-    new_list = []
-    for tile in tiles_list:
-        file_name = tile[0]
-        img = Image.open(file_name)
-        label = tile[1]  # get the label for the tile
-        augmentation_factor = class_by_tile_count_dict[label][1]
+def augment_tiles_based_on_factor(tiles_dict, class_by_tile_count_dict):
+    for label, slides in tiles_dict.items():
+        for _slide, tiles_list in slides.items():
+            new_list = []
+            for file_name in tiles_list:
+                img = Image.open(file_name)
+                augmentation_factor = class_by_tile_count_dict[label][1]
 
-        for i in range(1, augmentation_factor):
-            rotate = (90 * i) % 360
-            # build new file name
-            file_name = tile[0]
-            idx = file_name.rfind(".")
-            mirror = ""
-            if str(i > 3):
-                mirror = "_mirror"
-            file_name = file_name[:idx] + "_" + str(rotate) + mirror + file_name[idx:]
+                for i in range(1, augmentation_factor):
+                    rotate = (90 * i) % 360
+                    # build new file name
+                    idx = file_name.rfind(".")
+                    mirror = ""
+                    if i > 3:
+                        mirror = "_mirror"
+                    augment_file_name = (
+                        file_name[:idx] + "_" + str(rotate) + mirror + file_name[idx:]
+                    )
 
-            # skip the image processing if the augmented file already exists
-            if not os.path.exists(file_name):
-                new_img = rotate_and_mirror_tile(img, rotate, i > 3)
-                # Save the new image
-                new_img.save(file_name)
+                    # skip the image processing if the augmented file already exists
+                    if not os.path.exists(augment_file_name):
+                        new_img = rotate_and_mirror_tile(img, rotate, i > 3)
+                        # Save the new image
+                        new_img.save(augment_file_name)
 
-            # append to original list
-            new_list.append((file_name, label))
+                    # append to original list
+                    new_list.append(augment_file_name)
 
-    tiles_list.extend(new_list)
+            tiles_list.extend(new_list)
     return
 
 

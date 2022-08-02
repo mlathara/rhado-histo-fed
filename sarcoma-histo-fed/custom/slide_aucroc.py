@@ -66,6 +66,6 @@ class SlideROCCallback(tf.keras.callbacks.Callback):
                 tf.summary.scalar("train slide-level ROC-AUC", data=train_roc, step=epoch)
                 tf.summary.scalar("validation slide-level ROC-AUC", data=valid_roc, step=epoch)
         self.logger.info(
-            "\nTrain Slide-level ROC-AUC: %.4f\nValidation Slide-level ROC-AUC: %.4f\n"
+            "Train Slide-level ROC-AUC: %.4f\tValidation Slide-level ROC-AUC: %.4f"
             % (train_roc, valid_roc)
         )

@@ -106,11 +106,8 @@ class SimpleTrainer(Executor):
         self.num_epoch_per_auc_calc = num_epoch_per_auc_calc
         self.tensorboard = tensorboard
         if self.tensorboard:
-            if "log_dir" in self.tensorboard:
-                tensorboard_dir = self.tensorboard["log_dir"]
-            else:
-                tensorboard_dir = mkdtemp()
-                self.tensorboard["log_dir"] = tensorboard_dir
+            if "log_dir" not in self.tensorboard:
+                self.tensorboard["log_dir"] = mkdtemp()
 
         self.baseimage = os.getenv(baseimage)
         self.analytic_sender_id = analytic_sender_id
@@ -239,7 +236,6 @@ class SimpleTrainer(Executor):
         valid = self.validation_ds.map(lambda file, pixels, label: (pixels, label))
 
         callbacks = []
-        tensorboard_dir = None
         if self.tensorboard:
             callbacks.append(tf.keras.callbacks.TensorBoard(**self.tensorboard))
         if self.num_epoch_per_auc_calc:
@@ -248,7 +244,7 @@ class SimpleTrainer(Executor):
                     self.train_ds,
                     self.validation_ds,
                     self.num_epoch_per_auc_calc,
-                    tensorboard_dir,
+                    self.tensorboard["log_dir"],
                 )
             )
 
